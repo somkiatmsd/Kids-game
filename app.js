@@ -407,20 +407,24 @@ const PICTURES = [
   { main: '🍉', bg: '#fff3b0', deco: ['☀️', '🍓', '🍒', '🍋'] },
 ];
 const BANDS = ['#ffffff55', '#00000014', '#ffffff33'];
-function pictureSvg(pic, viewBox = '0 0 300 300') {
+// picture artwork drawn in a 300x300 box (shared by slide and jigsaw)
+function picInner(pic) {
   const [a, b, c, d] = pic.deco;
-  const span = el('span');
-  span.innerHTML =
-    `<svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg">` +
-    `<rect width="300" height="300" fill="${pic.bg}"/>` +
+  return `<rect width="300" height="300" fill="${pic.bg}"/>` +
     BANDS.map((f, i) => `<rect y="${i * 100}" width="300" height="100" fill="${f}"/>`).join('') +
     `<circle cx="150" cy="160" r="92" fill="#ffffff66"/>` +
     `<g font-size="56" text-anchor="middle" dominant-baseline="central">` +
     `<text x="50" y="50">${a}</text><text x="250" y="50">${b}</text>` +
     `<text x="50" y="250">${c}</text><text x="250" y="250">${d}</text></g>` +
-    `<text x="150" y="158" font-size="150" text-anchor="middle" dominant-baseline="central">${pic.main}</text>` +
-    `</svg>`;
+    `<text x="150" y="158" font-size="150" text-anchor="middle" dominant-baseline="central">${pic.main}</text>`;
+}
+function svgNode(markup) {
+  const span = el('span');
+  span.innerHTML = markup;
   return span.firstChild;
+}
+function pictureSvg(pic, viewBox = '0 0 300 300') {
+  return svgNode(`<svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg">${picInner(pic)}</svg>`);
 }
 const neighbors = (p) => {
   const r = Math.floor(p / 3), c = p % 3, out = [];
@@ -491,6 +495,173 @@ games.slide = {
     setBoard([grid, moves]);
   },
 };
+
+// ---------- jigsaw ----------
+// Each cell is 100 units; tabs stick out up to 22 units, so a piece is drawn in a 150x150 box.
+const JM = 25;
+function jigsawEdge(ax, ay, bx, by, s) {
+  if (!s) return `L${bx},${by}`;
+  const dx = (bx - ax) / 100, dy = (by - ay) / 100;
+  const nx = dy * s, ny = -dx * s; // outward normal (clockwise path)
+  const P = (t, h) => `${(ax + dx * t * 100 + nx * h * 100).toFixed(1)},${(ay + dy * t * 100 + ny * h * 100).toFixed(1)}`;
+  return `L${P(0.35, 0)} C${P(0.4, 0)} ${P(0.28, 0.22)} ${P(0.5, 0.22)} C${P(0.72, 0.22)} ${P(0.6, 0)} ${P(0.65, 0)} L${P(1, 0)}`;
+}
+function jigsawPath(r, c, rows, cols, hE, vE) {
+  const x = c * 100, y = r * 100;
+  return `M${x},${y} ` +
+    jigsawEdge(x, y, x + 100, y, r === 0 ? 0 : -vE[r - 1][c]) + ' ' +
+    jigsawEdge(x + 100, y, x + 100, y + 100, c === cols - 1 ? 0 : hE[r][c]) + ' ' +
+    jigsawEdge(x + 100, y + 100, x, y + 100, r === rows - 1 ? 0 : vE[r][c]) + ' ' +
+    jigsawEdge(x, y + 100, x, y, c === 0 ? 0 : -hE[r][c - 1]) + ' Z';
+}
+let jigsawUid = 0;
+
+games.jigsaw = {
+  title: 'ต่อจิ๊กซอว์',
+  desc: ['4 ชิ้น มีภาพจาง', '6 ชิ้น มีภาพจาง', '9 ชิ้น มีภาพจาง', '9 ชิ้น ไม่มีภาพจาง', '12 ชิ้น ไม่มีภาพจาง'],
+  round(lv) {
+    const [rows, cols] = [[2, 2], [2, 3], [3, 3], [3, 3], [3, 4]][lv - 1];
+    const ghost = lv <= 3;
+    const W = cols * 100, H = rows * 100;
+    const pic = fresh(() => pick(PICTURES));
+    const uid = ++jigsawUid;
+    const sign = () => (rand(2) ? 1 : -1);
+    const hE = Array.from({ length: rows }, () => Array.from({ length: cols - 1 }, sign));
+    const vE = Array.from({ length: rows - 1 }, () => Array.from({ length: cols }, sign));
+    // artwork stretched (cropped, not distorted) to the board size
+    const art = `<rect width="${W}" height="${H}" fill="${pic.bg}"/>` +
+      `<svg width="${W}" height="${H}" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice">${picInner(pic)}</svg>`;
+
+    $('prompt').replaceChildren(el('span', { className: 'preview' }, pictureSvg(pic)), el('span', { textContent: 'ต่อภาพให้ครบ' }));
+    say('ลากชิ้นส่วนไปวางให้ถูกที่นะ');
+    $('choices').replaceChildren();
+
+    const board = el('div', { className: 'jig-board' });
+    board.style.aspectRatio = `${cols} / ${rows}`;
+    if (rows === 3 && cols === 3) board.style.width = 'min(290px, 76vw)';
+    const outlines = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) outlines.push(jigsawPath(r, c, rows, cols, hE, vE));
+    board.append(svgNode(`<svg class="jig-bg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">` +
+      (ghost ? `<g opacity=".28">${art}</g>` : '') +
+      outlines.map((d) => `<path d="${d}" fill="none" stroke="#c9b79c" stroke-width="2" stroke-dasharray="6 5"/>`).join('') +
+      `</svg>`));
+    const tray = el('div', { className: 'jig-tray' });
+    const status = el('div', { className: 'moves', textContent: `0/${rows * cols} ชิ้น` });
+
+    let placed = 0, done = false, selected = null;
+    const pieces = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const d = outlines[r * cols + c];
+      const id = `jz${uid}-${r}-${c}`;
+      const x0 = c * 100 - JM, y0 = r * 100 - JM;
+      const node = svgNode(`<svg class="jig-piece" viewBox="${x0} ${y0} 150 150">` +
+        `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` +
+        `<g clip-path="url(#${id})">${art}</g>` +
+        `<path d="${d}" fill="none" stroke="#fff" stroke-width="2.5"/>` +
+        `<path d="${d}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1"/></svg>`);
+      const piece = { r, c, node, placed: false };
+      node.dataset.slot = `${r}-${c}`;
+      node.addEventListener('pointerdown', (e) => startDrag(e, piece));
+      pieces.push(piece);
+    }
+    shuffle(pieces).forEach((p) => tray.append(p.node));
+
+    const cellPx = () => board.clientWidth / cols;
+    // smaller tray pieces when there are more of them, so board + tray fit one screen
+    tray.dataset.scale = rows * cols <= 6 ? 0.72 : rows * cols <= 9 ? 0.56 : 0.5;
+    tray.dataset.cols = cols;
+    function sizeTray() {
+      tray.style.setProperty('--pw', `${cellPx() * 1.5 * tray.dataset.scale}px`);
+    }
+    function placePiece(p) {
+      p.placed = true; placed++;
+      p.node.classList.remove('sel', 'dragging');
+      p.node.removeAttribute('style');
+      p.node.classList.add('placed');
+      Object.assign(p.node.style, {
+        left: `${((p.c * 100 - JM) / W) * 100}%`, top: `${((p.r * 100 - JM) / H) * 100}%`,
+        width: `${(150 / W) * 100}%`, height: `${(150 / H) * 100}%`,
+      });
+      board.append(p.node);
+      tone(700, 0.08); tone(900, 0.1, 0.06);
+      status.textContent = `${placed}/${rows * cols} ชิ้น`;
+      if (placed === rows * cols) {
+        done = true;
+        later(() => board.classList.add('solved'), 150);
+        right('เก่งมาก ต่อภาพครบแล้ว');
+      }
+    }
+    function backToTray(p, bad) {
+      p.node.classList.remove('dragging');
+      p.node.removeAttribute('style');
+      tray.append(p.node);
+      if (bad) { wrong(); p.node.classList.add('bad'); setTimeout(() => p.node.classList.remove('bad'), 450); }
+    }
+    // board cell under a screen point, or null
+    function cellAt(x, y) {
+      const b = board.getBoundingClientRect();
+      if (x < b.left || x > b.right || y < b.top || y > b.bottom) return null;
+      return { r: Math.floor(((y - b.top) / b.height) * rows), c: Math.floor(((x - b.left) / b.width) * cols) };
+    }
+    function startDrag(e, p) {
+      if (done || p.placed) return;
+      e.preventDefault();
+      const rect = p.node.getBoundingClientRect();
+      const sx = e.clientX, sy = e.clientY;
+      let moved = false;
+      const full = cellPx() * 1.5;
+      const move = (ev) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
+        if (!moved) {
+          moved = true;
+          if (selected) { selected.node.classList.remove('sel'); selected = null; }
+          p.node.classList.add('dragging');
+          document.body.append(p.node);
+        }
+        // the piece's cell sits in the middle of its 150-unit box
+        Object.assign(p.node.style, {
+          width: `${full}px`, height: `${full}px`,
+          left: `${ev.clientX - full / 2}px`, top: `${ev.clientY - full / 2}px`,
+        });
+      };
+      const up = (ev) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        if (!moved) { // tap: select this piece, then tap the board
+          if (selected) selected.node.classList.remove('sel');
+          selected = selected === p ? null : p;
+          if (selected) { p.node.classList.add('sel'); tone(520, 0.06); }
+          return;
+        }
+        const b = board.getBoundingClientRect(), cell = b.width / cols;
+        const tx = b.left + (p.c + 0.5) * cell, ty = b.top + (p.r + 0.5) * cell;
+        if (Math.hypot(ev.clientX - tx, ev.clientY - ty) < cell * 0.45) placePiece(p);
+        else backToTray(p, !!cellAt(ev.clientX, ev.clientY));
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+      void rect;
+    }
+    board.addEventListener('pointerup', (e) => {
+      if (!selected || done) return;
+      const cell = cellAt(e.clientX, e.clientY);
+      if (!cell) return;
+      const p = selected; selected = null;
+      p.node.classList.remove('sel');
+      if (cell.r === p.r && cell.c === p.c) placePiece(p);
+      else backToTray(p, true);
+    });
+
+    setBoard([board, status, tray]);
+    sizeTray();
+  },
+};
+window.addEventListener('resize', () => {
+  const b = document.querySelector('.jig-board'), t = document.querySelector('.jig-tray');
+  if (b && t) t.style.setProperty('--pw', `${(b.clientWidth / t.dataset.cols) * 1.5 * t.dataset.scale}px`);
+});
 
 // ---------- odd one out ----------
 games.odd = {

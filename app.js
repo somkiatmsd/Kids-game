@@ -299,12 +299,16 @@ const games = {
       const grid = el('div', { className: 'memory five' });
       let first = null, busy = preview > 0;
       const btns = cards.map((e) => {
-        const c = el('button', { className: 'mcard' + (preview ? ' open' : ''), textContent: e, ariaLabel: 'การ์ด' });
+        const c = el('button', { className: 'mcard' + (preview ? ' open' : ''), ariaLabel: 'การ์ด' }, [
+          el('span', { className: 'back', textContent: '?' }),
+          el('span', { className: 'face', textContent: e }),
+        ]);
+        c.dataset.face = e;
         c.onclick = () => {
           if (busy || c === first || c.classList.contains('done')) return;
           c.classList.add('open'); tone(520, 0.08);
           if (!first) { first = c; return; }
-          if (first.textContent === e) {
+          if (first.dataset.face === e) {
             first.classList.add('done'); c.classList.add('done'); first = null;
             busy = session.q + 1 >= QUESTIONS;
             right();

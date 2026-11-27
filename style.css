@@ -86,9 +86,15 @@ main { max-width: 820px; margin: 0 auto; padding: 16px; }
 .memory { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
 .mcard {
   aspect-ratio: 1; border: 0; border-radius: 16px; cursor: pointer; font-size: 2.4rem;
-  background: var(--accent); color: transparent; box-shadow: var(--shadow); transition: transform .2s, background .2s;
+  background: var(--accent); color: #fff; box-shadow: var(--shadow); transition: transform .2s, background .2s;
+  padding: 0; display: flex; align-items: center; justify-content: center;
 }
-.mcard.open, .mcard.done { background: #fff4d6; color: initial; animation: pop .25s; }
+/* Emoji ignore `color`, so hide the face with display (works on iOS Safari too) */
+.mcard .face { display: none; }
+.mcard .back { font-weight: 800; opacity: .9; }
+.mcard.open .face, .mcard.done .face { display: inline; }
+.mcard.open .back, .mcard.done .back { display: none; }
+.mcard.open, .mcard.done { background: #fff4d6; animation: pop .25s; }
 .mcard.done { opacity: .55; }
 
 .cheer {

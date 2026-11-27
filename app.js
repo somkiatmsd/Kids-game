@@ -10,10 +10,13 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-let stars = store.get('stars', 0);
 let soundOn = store.get('sound', true);
-// progress[game] = { unlocked: n, best: { [level]: starCount } }
-const progress = store.get('progress', {});
+// players = [{ id, name, avatar, score, progress: { [game]: { unlocked, best: { [level]: stars } } } }]
+let players = store.get('players', []);
+let currentId = store.get('currentPlayer', null);
+const AVATARS = ['🐶', '🐱', '🐰', '🐼', '🦁', '🐸', '🐵', '🦄', '🐯', '🐨'];
+const me = () => players.find((p) => p.id === currentId) || null;
+const savePlayers = () => { store.set('players', players); store.set('currentPlayer', currentId); };
 let session = null;        // { game, level, q, mistakes, last }
 let locked = false;
 let timers = [];
@@ -80,7 +83,13 @@ function say(text) {
 }
 
 // ---------- UI ----------
-function updateStars() { $('stars').textContent = stars; store.set('stars', stars); }
+function updateStars() {
+  const p = me();
+  $('stars').textContent = p ? p.score : 0;
+  $('playerBtn').classList.toggle('hidden', !p);
+  if (p) $('playerBtn').textContent = `${p.avatar} ${p.name}`;
+  savePlayers();
+}
 function updateSoundBtn() { $('soundBtn').textContent = soundOn ? '🔊' : '🔇'; }
 
 function cheer(emoji) {
@@ -117,7 +126,7 @@ function wrong() { session.mistakes++; sfxBad(); }
 // Called when a question is answered correctly. Advances the level.
 function right(afterSay) {
   session.q++;
-  stars++; updateStars(); sfxGood();
+  me().score++; updateStars(); sfxGood();
   cheer(pick(['👍', '😄', '✨', '💯', '🌟']));
   renderDots();
   later(() => {
@@ -380,15 +389,192 @@ const games = {
   },
 };
 
+// ---------- sliding puzzle (3x3) ----------
+const PICTURES = [
+  { main: '🐶', bg: '#bde0fe', deco: ['☀️', '☁️', '🌼', '🦴'] },
+  { main: '🐱', bg: '#ffd6e0', deco: ['🌙', '⭐', '🧶', '🐟'] },
+  { main: '🦁', bg: '#ffe8a3', deco: ['☀️', '🌴', '🌿', '🍖'] },
+  { main: '🐼', bg: '#d8f3dc', deco: ['🎋', '☁️', '🍃', '🌱'] },
+  { main: '🐸', bg: '#c7f0ff', deco: ['🌧️', '🦋', '🪷', '💧'] },
+  { main: '🦄', bg: '#e9d5ff', deco: ['🌈', '✨', '🌸', '💖'] },
+  { main: '🐵', bg: '#ffe0c2', deco: ['🌳', '☀️', '🍌', '🍃'] },
+  { main: '🚀', bg: '#1d2b53', deco: ['🌙', '⭐', '🪐', '✨'] },
+  { main: '🐢', bg: '#a8e6cf', deco: ['☀️', '🐚', '🌊', '🦀'] },
+  { main: '🍉', bg: '#fff3b0', deco: ['☀️', '🍓', '🍒', '🍋'] },
+];
+const BANDS = ['#ffffff55', '#00000014', '#ffffff33'];
+function pictureSvg(pic, viewBox = '0 0 300 300') {
+  const [a, b, c, d] = pic.deco;
+  const span = el('span');
+  span.innerHTML =
+    `<svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect width="300" height="300" fill="${pic.bg}"/>` +
+    BANDS.map((f, i) => `<rect y="${i * 100}" width="300" height="100" fill="${f}"/>`).join('') +
+    `<circle cx="150" cy="160" r="92" fill="#ffffff66"/>` +
+    `<g font-size="56" text-anchor="middle" dominant-baseline="central">` +
+    `<text x="50" y="50">${a}</text><text x="250" y="50">${b}</text>` +
+    `<text x="50" y="250">${c}</text><text x="250" y="250">${d}</text></g>` +
+    `<text x="150" y="158" font-size="150" text-anchor="middle" dominant-baseline="central">${pic.main}</text>` +
+    `</svg>`;
+  return span.firstChild;
+}
+const neighbors = (p) => {
+  const r = Math.floor(p / 3), c = p % 3, out = [];
+  if (r > 0) out.push(p - 3); if (r < 2) out.push(p + 3);
+  if (c > 0) out.push(p - 1); if (c < 2) out.push(p + 1);
+  return out;
+};
+
+games.slide = {
+  title: 'สไลด์ภาพ',
+  desc: ['เลื่อน 3 ที มีเลขช่วย', 'เลื่อน 6 ที มีเลขช่วย', 'เลื่อน 10 ที มีเลขช่วย', 'เลื่อน 16 ที ไม่มีเลข', 'สลับมั่ว ไม่มีเลข'],
+  round(lv) {
+    const depth = [3, 6, 10, 16, 40][lv - 1];
+    const showNums = lv <= 3;
+    const pic = fresh(() => pick(PICTURES));
+    // tiles[pos] = tile id (0..7), 8 = blank; solved when tiles[i] === i
+    let tiles, blank;
+    do {
+      tiles = [0, 1, 2, 3, 4, 5, 6, 7, 8]; blank = 8;
+      let prev = -1;
+      for (let k = 0; k < depth; k++) {
+        const n = pick(neighbors(blank).filter((x) => x !== prev));
+        [tiles[blank], tiles[n]] = [tiles[n], tiles[blank]];
+        prev = blank; blank = n;
+      }
+    } while (tiles.every((t, i) => t === i));
+
+    const preview = el('span', { className: 'preview' }, pictureSvg(pic));
+    $('prompt').replaceChildren(preview, el('span', { textContent: 'เลื่อนให้เป็นภาพนี้' }));
+    say('เลื่อนช่องให้เป็นภาพเหมือนตัวอย่างนะ');
+    $('choices').replaceChildren();
+
+    const grid = el('div', { className: 'slide' });
+    const moves = el('div', { className: 'moves', textContent: 'เลื่อนแล้ว 0 ที' });
+    let count = 0, done = false;
+    const nodes = [];
+    for (let id = 0; id < 8; id++) {
+      const r = Math.floor(id / 3), c = id % 3;
+      const t = el('button', { className: 'tile', ariaLabel: `ช่อง ${id + 1}` },
+        [pictureSvg(pic, `${c * 100} ${r * 100} 100 100`)]);
+      if (showNums) t.append(el('span', { className: 'n', textContent: id + 1 }));
+      t.onclick = () => move(id);
+      nodes[id] = t; grid.append(t);
+    }
+    const place = () => tiles.forEach((id, pos) => {
+      if (id === 8) return;
+      nodes[id].style.transform = `translate(${(pos % 3) * 100}%, ${Math.floor(pos / 3) * 100}%)`;
+    });
+    function move(id) {
+      if (done) return;
+      const pos = tiles.indexOf(id);
+      if (!neighbors(pos).includes(blank)) { tone(180, 0.08, 0, 'square'); return; }
+      [tiles[pos], tiles[blank]] = [tiles[blank], tiles[pos]];
+      blank = pos; count++;
+      moves.textContent = `เลื่อนแล้ว ${count} ที`;
+      tone(440 + rand(200), 0.06); place();
+      if (tiles.every((t, i) => t === i)) {
+        done = true;
+        // too many moves for this level counts as one mistake (affects level stars)
+        if (count > Math.min(depth, 22) * 2 + 4) session.mistakes++;
+        const last = el('button', { className: 'tile' }, [pictureSvg(pic, '200 200 100 100')]);
+        last.style.transform = 'translate(200%, 200%)';
+        later(() => { grid.append(last); grid.classList.add('solved'); }, 200);
+        right(`เก่งมาก เลื่อน ${count} ที`);
+      }
+    }
+    place();
+    setBoard([grid, moves]);
+  },
+};
+
 // ---------- progress ----------
-function gp(name) { return (progress[name] ||= { unlocked: 1, best: {} }); }
-function saveProgress() { store.set('progress', progress); }
+function gp(name) { return (me().progress[name] ||= { unlocked: 1, best: {} }); }
+function saveProgress() { savePlayers(); }
+function statsOf(p) {
+  let passed = 0, trophies = 0;
+  for (const g of Object.values(p.progress)) for (const s of Object.values(g.best)) { passed++; trophies += s; }
+  return { passed, trophies };
+}
+
+// ---------- players & leaderboard ----------
+let chosenAvatar = AVATARS[0];
+
+function showPlayers() {
+  stopAll();
+  show('players', 'ผู้เล่น & คะแนน');
+  $('homeBtn').classList.toggle('hidden', !me());
+  const ranked = [...players].sort((a, b) => b.score - a.score || statsOf(b).trophies - statsOf(a).trophies);
+  $('rankList').replaceChildren(...ranked.map((p, i) => {
+    const { passed, trophies } = statsOf(p);
+    const total = Object.keys(games).length * LEVELS;
+    const del = el('button', { className: 'del', textContent: '🗑️', ariaLabel: `ลบ ${p.name}` });
+    del.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm(`ลบผู้เล่น "${p.name}" และคะแนนทั้งหมด?`)) return;
+      players = players.filter((x) => x.id !== p.id);
+      if (currentId === p.id) currentId = players[0]?.id ?? null;
+      updateStars(); showPlayers();
+    };
+    const name = el('div', { className: 'name', textContent: p.name });
+    if (p.id === currentId) name.append(el('span', { className: 'badge', textContent: 'กำลังเล่น' }));
+    const row = el('li', { className: 'rank-row' + (p.id === currentId ? ' me' : '') }, [
+      el('span', { className: 'rank', textContent: ['🥇', '🥈', '🥉'][i] || i + 1 }),
+      el('span', { className: 'av', textContent: p.avatar }),
+      el('div', { className: 'info' }, [name, el('div', { className: 'sub', textContent: `ผ่าน ${passed}/${total} ด่าน · 🏅 ${trophies}` })]),
+      el('span', { className: 'score', textContent: `⭐ ${p.score}` }),
+      del,
+    ]);
+    row.onclick = () => selectPlayer(p.id);
+    return row;
+  }));
+  $('newPlayerTitle').textContent = players.length ? 'เพิ่มผู้เล่นใหม่' : 'สวัสดี! หนูชื่ออะไร?';
+  chosenAvatar = AVATARS.find((a) => !players.some((p) => p.avatar === a)) || AVATARS[0];
+  $('avatarPick').replaceChildren(...AVATARS.map((a) => {
+    const b = el('button', { textContent: a, className: a === chosenAvatar ? 'sel' : '', ariaLabel: a });
+    b.onclick = () => { chosenAvatar = a; tone(600, 0.08); showAvatarSel(); };
+    return b;
+  }));
+  if (!players.length) say('สวัสดีจ้า หนูชื่ออะไร');
+}
+function showAvatarSel() {
+  [...$('avatarPick').children].forEach((b) => b.classList.toggle('sel', b.textContent === chosenAvatar));
+}
+
+function selectPlayer(id) {
+  currentId = id; updateStars();
+  say(`สวัสดี ${me().name}`);
+  showMenu();
+}
+
+function addPlayer() {
+  const input = $('nameInput');
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  if (!name) {
+    input.classList.add('bad'); sfxBad(); say('พิมพ์ชื่อก่อนนะ');
+    setTimeout(() => input.classList.remove('bad'), 450);
+    input.focus();
+    return;
+  }
+  const existing = players.find((p) => p.name === name);
+  if (existing) { input.value = ''; selectPlayer(existing.id); return; }
+  const p = { id: Date.now().toString(36) + rand(1000), name, avatar: chosenAvatar, score: 0, progress: {} };
+  // carry over scores saved before player profiles existed
+  if (!players.length) {
+    p.score = store.get('stars', 0);
+    p.progress = store.get('progress', {});
+    try { localStorage.removeItem('stars'); localStorage.removeItem('progress'); } catch {}
+  }
+  players.push(p);
+  input.value = '';
+  selectPlayer(p.id);
+}
 function starsFor(mistakes) { return mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1; }
 
 // ---------- screens ----------
 let currentGame = null;
 function show(screen, title) {
-  for (const s of ['menu', 'levels', 'game', 'result']) $(s).classList.toggle('hidden', s !== screen);
+  for (const s of ['menu', 'levels', 'game', 'result', 'players']) $(s).classList.toggle('hidden', s !== screen);
   $('homeBtn').classList.toggle('hidden', screen === 'menu');
   $('title').textContent = title || 'เกมหนูน้อย';
   window.scrollTo(0, 0);
@@ -402,6 +588,7 @@ function stopAll() {
 function showMenu() { stopAll(); session = null; show('menu'); }
 
 function showLevels(name) {
+  if (!me()) return showPlayers();
   stopAll();
   currentGame = name;
   const g = games[name], p = gp(name);
@@ -451,13 +638,19 @@ function finishLevel() {
 }
 
 // ---------- wiring ----------
-document.querySelectorAll('.game-card').forEach((b) => (b.onclick = () => showLevels(b.dataset.game)));
-$('homeBtn').onclick = showMenu;
+document.querySelectorAll('.game-card[data-game]').forEach((b) => (b.onclick = () => showLevels(b.dataset.game)));
+$('rankCard').onclick = showPlayers;
+$('playerBtn').onclick = showPlayers;
+$('addPlayerBtn').onclick = addPlayer;
+$('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addPlayer(); });
+$('homeBtn').onclick = () => (me() ? showMenu() : showPlayers());
 $('nextLevelBtn').onclick = () => startLevel(session.game, session.level + 1);
 $('replayBtn').onclick = () => startLevel(session.game, session.level);
 $('levelsBtn').onclick = () => showLevels(session.game);
 $('soundBtn').onclick = () => { soundOn = !soundOn; store.set('sound', soundOn); updateSoundBtn(); };
+if (!me() && players.length) currentId = players[0].id;
 updateStars(); updateSoundBtn();
+if (!me()) showPlayers();
 
 // ---------- PWA ----------
 if ('serviceWorker' in navigator) {

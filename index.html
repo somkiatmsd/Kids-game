@@ -17,7 +17,8 @@
   <header class="topbar">
     <button id="homeBtn" class="icon-btn hidden" aria-label="กลับหน้าหลัก">🏠</button>
     <h1 id="title">เกมหนูน้อย</h1>
-    <div class="stars" aria-label="ดาวที่สะสม">⭐ <span id="stars">0</span></div>
+    <button id="playerBtn" class="player-chip hidden" aria-label="เปลี่ยนผู้เล่น"></button>
+    <div class="stars" aria-label="คะแนน">⭐ <span id="stars">0</span></div>
     <button id="soundBtn" class="icon-btn" aria-label="เปิด/ปิดเสียง">🔊</button>
   </header>
 
@@ -31,8 +32,21 @@
         <button class="game-card c4" data-game="thai"><span class="big">ก</span>ก ไก่ - ฮ นกฮูก</button>
         <button class="game-card c5" data-game="math"><span class="big">➕</span>บวกลบเลข</button>
         <button class="game-card c6" data-game="shape"><span class="big">🔺</span>รูปทรง</button>
+        <button class="game-card c7" data-game="slide"><span class="big">🧩</span>สไลด์ภาพ</button>
+        <button class="game-card c8" id="rankCard"><span class="big">🏆</span>ผู้เล่น & คะแนน</button>
       </div>
       <button id="installBtn" class="install hidden">📲 ติดตั้งลงเครื่อง</button>
+    </section>
+
+    <section id="players" class="screen hidden">
+      <p class="hello">🏆 ตารางคะแนน</p>
+      <ol id="rankList" class="rank-list"></ol>
+      <div class="new-player">
+        <h3 id="newPlayerTitle">เพิ่มผู้เล่นใหม่</h3>
+        <input id="nameInput" maxlength="12" placeholder="พิมพ์ชื่อของหนู" autocomplete="off" enterkeyhint="done">
+        <div id="avatarPick" class="avatar-pick"></div>
+        <button id="addPlayerBtn" class="btn primary">✅ เริ่มเล่นเลย</button>
+      </div>
     </section>
 
     <section id="levels" class="screen hidden">

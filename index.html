@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>เกมหนูน้อย</title>
+  <meta name="description" content="เกมฝึกสมองสำหรับเด็ก: นับเลข จับคู่ภาพ ทายสี และ ก-ฮ">
+  <meta name="theme-color" content="#ff8a3d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="เกมหนูน้อย">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="homeBtn" class="icon-btn hidden" aria-label="กลับหน้าหลัก">🏠</button>
+    <h1 id="title">เกมหนูน้อย</h1>
+    <div class="stars" aria-label="ดาวที่สะสม">⭐ <span id="stars">0</span></div>
+    <button id="soundBtn" class="icon-btn" aria-label="เปิด/ปิดเสียง">🔊</button>
+  </header>
+
+  <main id="app">
+    <section id="menu" class="screen">
+      <p class="hello">เลือกเกมที่อยากเล่นเลย!</p>
+      <div class="menu-grid">
+        <button class="game-card c1" data-game="count"><span class="big">🍎</span>นับเลข</button>
+        <button class="game-card c2" data-game="memory"><span class="big">🃏</span>จับคู่ภาพ</button>
+        <button class="game-card c3" data-game="color"><span class="big">🎨</span>ทายสี</button>
+        <button class="game-card c4" data-game="thai"><span class="big">ก</span>ก ไก่ - ฮ นกฮูก</button>
+        <button class="game-card c5" data-game="math"><span class="big">➕</span>บวกเลข</button>
+        <button class="game-card c6" data-game="shape"><span class="big">🔺</span>รูปทรง</button>
+      </div>
+      <button id="installBtn" class="install hidden">📲 ติดตั้งลงเครื่อง</button>
+    </section>
+
+    <section id="game" class="screen hidden">
+      <div id="prompt" class="prompt"></div>
+      <div id="board" class="board"></div>
+      <div id="choices" class="choices"></div>
+    </section>
+  </main>
+
+  <div id="cheer" class="cheer hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

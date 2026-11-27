@@ -1,0 +1,18 @@
+{
+  "name": "เกมหนูน้อย - Kids Games",
+  "short_name": "เกมหนูน้อย",
+  "description": "เกมฝึกสมองสำหรับเด็ก: นับเลข บวกเลข จับคู่ภาพ ทายสี รูปทรง และ ก-ฮ",
+  "lang": "th",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7e8",
+  "theme_color": "#ff8a3d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

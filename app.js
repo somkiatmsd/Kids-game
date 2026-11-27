@@ -492,6 +492,116 @@ games.slide = {
   },
 };
 
+// ---------- odd one out ----------
+games.odd = {
+  title: 'หาตัวที่ต่าง',
+  desc: ['4 ช่อง ต่างกันชัด', '9 ช่อง', '12 ช่อง คล้ายกัน', '16 ช่อง คล้ายมาก', 'ตัวไหนหันคนละทาง'],
+  sets: [
+    [['🐶', '🍎'], ['🚗', '🌸'], ['⭐', '🐟'], ['🎈', '🐢'], ['🍌', '⚽'], ['🐱', '🚀'], ['🌞', '🍦']],
+    [['🍎', '🍌'], ['🐶', '🐱'], ['🚗', '🚌'], ['🌸', '🌻'], ['🐟', '🐙'], ['🍓', '🍇'], ['⚽', '🏀']],
+    [['🍎', '🍅'], ['🐶', '🐕'], ['🍊', '🍑'], ['🐤', '🐥'], ['🌸', '🌺'], ['🚗', '🚙'], ['🐻', '🧸'], ['⚽', '🏐']],
+    [['😀', '😃'], ['🙂', '😊'], ['🐱', '😺'], ['🌑', '🌚'], ['🧡', '💛'], ['🔵', '🫐'], ['🐵', '🙈'], ['🍏', '🍐']],
+    [['🐟'], ['🐌'], ['🚗'], ['🐢'], ['🦆'], ['🐘'], ['🐕'], ['🐊'], ['🦒'], ['🚂'], ['🐓'], ['🚜']],
+  ],
+  round(lv) {
+    const size = [4, 9, 12, 16, 16][lv - 1];
+    const cols = [2, 3, 4, 4, 4][lv - 1];
+    const set = fresh(() => pick(this.sets[lv - 1]));
+    // randomly swap which emoji is the "many" and which is the odd one
+    const [same, diff] = lv === 5 ? [set[0], set[0]] : rand(2) ? set : [set[1], set[0]];
+    const oddPos = rand(size);
+    if (lv === 5) setPrompt('ตัวไหนหันคนละทาง?', 'หาตัวที่หันไปคนละทางนะ');
+    else setPrompt('ตัวไหนไม่เหมือนเพื่อน?', 'หาตัวที่ไม่เหมือนเพื่อนนะ');
+    $('choices').replaceChildren();
+    const grid = el('div', { className: 'odd-grid' });
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.setProperty('--odd-size', ['3.6rem', '3rem', '2.4rem', '2.2rem', '2.2rem'][lv - 1]);
+    let done = false;
+    for (let i = 0; i < size; i++) {
+      const isOdd = i === oddPos;
+      const face = el('span', { textContent: isOdd ? diff : same });
+      if (lv === 5 && isOdd) face.className = 'flip';
+      const b = el('button', { className: 'odd-item', ariaLabel: isOdd ? 'ตัวที่ต่าง' : 'ตัวเหมือน' }, [face]);
+      b.onclick = () => {
+        if (done) return;
+        if (isOdd) { done = true; b.classList.add('good'); right(); }
+        else { wrong(); b.classList.add('bad'); setTimeout(() => b.classList.remove('bad'), 450); }
+      };
+      grid.append(b);
+    }
+    setBoard(grid);
+  },
+};
+
+// ---------- simon (repeat the sequence) ----------
+const PADS = [
+  { color: '#ff4d4d', icon: '🐶', freq: 262 },
+  { color: '#2ecc40', icon: '🐸', freq: 330 },
+  { color: '#1e88ff', icon: '🐳', freq: 392 },
+  { color: '#ffd400', icon: '🐥', freq: 523 },
+  { color: '#b05cff', icon: '🦄', freq: 587 },
+  { color: '#ff8c1a', icon: '🦊', freq: 659 },
+];
+games.simon = {
+  title: 'จำลำดับ',
+  desc: ['3 ปุ่ม จำ 2 ตัว', '4 ปุ่ม จำ 3 ตัว', '4 ปุ่ม จำ 4 ตัว', '6 ปุ่ม จำ 4 ตัว', '6 ปุ่ม จำ 5 ตัว เร็วขึ้น'],
+  round(lv) {
+    const nPads = [3, 4, 4, 6, 6][lv - 1];
+    const len = [2, 3, 4, 4, 5][lv - 1];
+    const speed = [700, 650, 600, 550, 450][lv - 1];
+    const pads = PADS.slice(0, nPads);
+    const seq = fresh(() => Array.from({ length: len }, () => rand(nPads)));
+    let input = 0, playing = true, done = false;
+
+    $('prompt').replaceChildren(el('span', { textContent: 'ดูแล้วกดตามนะ' }),
+      el('button', { className: 'speak', textContent: '🔁', ariaLabel: 'ดูอีกครั้ง', onclick: () => { if (!playing && !done) { wrongReplay(false); } } }));
+    $('choices').replaceChildren();
+    const grid = el('div', { className: 'simon wait' });
+    grid.style.gridTemplateColumns = `repeat(${nPads === 4 ? 2 : 3}, 1fr)`;
+    const status = el('div', { className: 'simon-status' });
+    const dots = el('div', { className: 'simon-seq' }, seq.map(() => el('span')));
+    const btns = pads.map((p, i) => {
+      const b = el('button', { className: 'pad', textContent: p.icon, ariaLabel: `ปุ่ม ${i + 1}` });
+      b.style.background = p.color;
+      b.onclick = () => press(i);
+      return b;
+    });
+    grid.append(...btns);
+
+    const flash = (i, ms) => {
+      btns[i].classList.add('lit'); tone(pads[i].freq, ms / 1000 * 0.8, 0, 'triangle');
+      later(() => btns[i].classList.remove('lit'), ms * 0.7);
+    };
+    function playSeq(delay = 900) {
+      playing = true; input = 0;
+      grid.classList.add('wait');
+      [...dots.children].forEach((d) => d.classList.remove('ok'));
+      status.textContent = '👀 ดูให้ดีนะ...';
+      seq.forEach((i, k) => later(() => flash(i, speed), delay + k * speed));
+      later(() => {
+        playing = false; grid.classList.remove('wait');
+        status.textContent = '👆 ถึงตาหนูแล้ว!';
+      }, delay + seq.length * speed);
+    }
+    function wrongReplay(isMistake) {
+      if (isMistake) { wrong(); status.textContent = '❌ ไม่ใช่นะ ดูใหม่อีกครั้ง'; }
+      playSeq(isMistake ? 1100 : 300);
+    }
+    function press(i) {
+      if (playing || done) return;
+      flash(i, 350);
+      if (i !== seq[input]) { playing = true; wrongReplay(true); return; }
+      dots.children[input].classList.add('ok');
+      input++;
+      if (input === seq.length) { done = true; status.textContent = '🎉 ถูกต้อง!'; right(); }
+    }
+
+    setBoard([grid, dots, status]);
+    say('ดูแล้วกดตามนะ');
+    playSeq(1200);
+  },
+};
+
 // ---------- progress ----------
 function gp(name) { return (me().progress[name] ||= { unlocked: 1, best: {} }); }
 function saveProgress() { savePlayers(); }
